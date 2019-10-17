@@ -15,10 +15,12 @@ const compatHanja = fs.readFileSync('assets/compatHanja.txt').toString()
         .map(line => line.split('\t'))
         .reduce((a, c) => (a[c[0]] = c[1], a), {})
 
-const hanja = fs.readFileSync('assets/hanja.txt').toString()
+const data = fs.readFileSync('assets/hanja.txt').toString()
         .split('\n')
         .filter(line => !line.startsWith('#') && line.length > 0)
         .map(line => line.split(':'))
+
+const hanja = data
         .filter(entry => entry[0].length == 1)
         .map(entry => {
             const hanja = compatHanja[entry[1]] ? compatHanja[entry[1]] : entry[1]
@@ -27,6 +29,14 @@ const hanja = fs.readFileSync('assets/hanja.txt').toString()
         })
         .reduce((a, c) => (a[c[0]] = (a[c[0]] ? a[c[0]] + ', ' + c[1] : c[1]), a), {})
 
+const reading = data
+        .filter(entry => entry[0].length == 1)
+        .map(entry => {
+            const hanja = compatHanja[entry[1]] ? compatHanja[entry[1]] : entry[1]
+            return [hanja, entry[0]]
+        })
+        .reduce((a, c) => (a[c[0]] = (a[c[0]] ? a[c[0]] : c[1]), a), {})
+        
 const kancheja = fs.readFileSync('assets/kancheja.txt').toString()
         .split('\n').map(line => line.split('\t'))
 
@@ -34,12 +44,15 @@ const shinjache = fs.readFileSync('assets/shinjache.txt').toString()
         .split('\n').map(line => line.split('\t'))
 
 const register = (entry) => {
-    if(hanja[entry[1]] && hanja[entry[0]] && hanja[entry[1]] != hanja[entry[0]]) hanja[entry[1]] += ', ' + hanja[entry[0]]
+    if(hanja[entry[1]] && hanja[entry[0]] && hanja[entry[1]] != hanja[entry[0]])
+        hanja[entry[1]] += ', ' + hanja[entry[0]]
     else hanja[entry[1]] = hanja[entry[0]]
 }
 
 kancheja.forEach(entry => register(entry))
 shinjache.forEach(entry => register(entry))
+
+let groups = {}
 
 const createButtons = (text, page) => {
     const filtered = text.split('').filter(c => hanja[c])
@@ -58,8 +71,9 @@ const onHanjaCommand = (ctx) => {
     const buttons = createButtons(ctx.message.reply_to_message.text, 0)
     ctx.reply(ctx.message.reply_to_message.text, Markup.inlineKeyboard(buttons).extra())
 }
+bot.command('hanzi', onHanjaCommand)
+bot.command('kanji', onHanjaCommand)
 bot.command('hanja', onHanjaCommand)
-bot.command('무슨한자', onHanjaCommand)
 
 bot.action(/han_(.+)/, ctx => {
     return ctx.answerCbQuery(hanja[ctx.match[1]])
@@ -70,6 +84,29 @@ bot.action(/page_(.+)/, ctx => {
     const text = ctx.update.callback_query.message.text
     ctx.editMessageText(text, Markup.inlineKeyboard(createButtons(text, page)).extra())
 })
+
+bot.on('text', (ctx) => {
+    const msg = ctx.message
+    if(groups[msg.chat.id] == undefined) {
+        ctx.getChat().then(chat => {
+            groups[msg.chat.id] = parseConfig(chat.description)
+            translate(msg)
+        })
+    } else {
+        translate(msg)
+    }
+})
+
+const translate = (msg) => {
+    if(groups[msg.chat.id] == true && msg.text) {
+        const text = msg.text + ' ' + msg.text.split('').map(c => reading[c] || c).join('')
+        if(!text.split('').some(c => hanja[c])) return
+        const buttons = createButtons(text, 0)
+        bot.telegram.sendMessage(msg.chat.id, text, Markup.inlineKeyboard(buttons).extra())
+    }
+}
+
+const parseConfig = (text) => (text || '').split('\n').some(line => line == '@han on')
 
 bot.catch(err => console.log(err))
 
