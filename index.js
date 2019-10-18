@@ -55,7 +55,7 @@ shinjache.forEach(entry => register(entry))
 let groups = {}
 
 const createButtons = (text, page) => {
-    const filtered = text.split('').filter(c => hanja[c])
+    const filtered = text.split('').filter(c => hanja[compatHanja[c] || c])
     const buttons = filtered
             .slice(page * PAGE_SIZE, (page+1) * PAGE_SIZE)
             .map(c => Markup.callbackButton(c, 'han_' + c))
@@ -76,7 +76,7 @@ bot.command('kanji', onHanjaCommand)
 bot.command('hanja', onHanjaCommand)
 
 bot.action(/han_(.+)/, ctx => {
-    return ctx.answerCbQuery(hanja[ctx.match[1]])
+    return ctx.answerCbQuery(hanja[compatHanja[ctx.match[1]] || ctx.match[1]])
 })
 
 bot.action(/page_(.+)/, ctx => {
@@ -99,8 +99,8 @@ bot.on('text', (ctx) => {
 
 const translate = (msg) => {
     if(groups[msg.chat.id] == true && msg.text) {
-        const text = msg.text + ' ' + msg.text.split('').map(c => reading[c] || c).join('')
-        if(!text.split('').some(c => hanja[c])) return
+        const text = msg.text + ' ' + msg.text.split('').map(c => reading[compatHanja[c] || c] || c).join('')
+        if(!text.split('').some(c => hanja[compatHanja[c] || c])) return
         const buttons = createButtons(text, 0)
         bot.telegram.sendMessage(msg.chat.id, text, Markup.inlineKeyboard(buttons).extra())
     }
