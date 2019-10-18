@@ -29,14 +29,24 @@ const hanja = data
         })
         .reduce((a, c) => (a[c[0]] = (a[c[0]] ? a[c[0]] + ', ' + c[1] : c[1]), a), {})
 
+const readingFreq = {}
+
+data.filter(entry => entry[0].length >= 2)
+        .forEach(entry => entry[1].split('').forEach((c, i) => {
+            const r = entry[0][i]
+            if(!readingFreq[c]) readingFreq[c] = {}
+            if(!readingFreq[c][r]) readingFreq[c][r] = 0
+            readingFreq[c][r]++
+        }))
+
 const reading = data
         .filter(entry => entry[0].length == 1)
         .map(entry => {
             const hanja = compatHanja[entry[1]] ? compatHanja[entry[1]] : entry[1]
             return [hanja, entry[0]]
         })
-        .reduce((a, c) => (a[c[0]] = (a[c[0]] ? a[c[0]] : c[1]), a), {})
-        
+        .reduce((a, c) => (a[c[0]] = (a[c[0]] ? (!readingFreq[c[0]] || readingFreq[c[0]][a[c[0]]] > readingFreq[c[0]][c[1]] ? a[c[0]] : c[1]) : c[1]), a), {})
+
 const kancheja = fs.readFileSync('assets/kancheja.txt').toString()
         .split('\n').map(line => line.split('\t'))
 
@@ -71,8 +81,6 @@ const onHanjaCommand = (ctx) => {
     const buttons = createButtons(ctx.message.reply_to_message.text, 0)
     ctx.reply(ctx.message.reply_to_message.text, Markup.inlineKeyboard(buttons).extra())
 }
-bot.command('hanzi', onHanjaCommand)
-bot.command('kanji', onHanjaCommand)
 bot.command('hanja', onHanjaCommand)
 
 bot.action(/han_(.+)/, ctx => {
@@ -99,7 +107,8 @@ bot.on('text', (ctx) => {
 
 const translate = (msg) => {
     if(groups[msg.chat.id] == true && msg.text) {
-        const text = msg.text + ' ' + msg.text.split('').map(c => reading[compatHanja[c] || c] || c).join('')
+        const text = msg.text + ' '
+                + msg.text.split('').map(c => reading[compatHanja[c] || c] || c).join('')
         if(!text.split('').some(c => hanja[compatHanja[c] || c])) return
         const buttons = createButtons(text, 0)
         bot.telegram.sendMessage(msg.chat.id, text, Markup.inlineKeyboard(buttons).extra())
